@@ -23,6 +23,9 @@ const aiSearchPlanSchema = z.object({
 
 export type AiSearchPlan = z.infer<typeof aiSearchPlanSchema>;
 
+const SYSTEM_PROMPT =
+  "你是学术检索词规划器。只返回 JSON：topics、keywordsZh、keywordsEn、filters、explanation。filters 仅可含 fromYear、toYear、type、language、isOpenAccess、sort；关键词应适合 OpenAlex 题名与摘要检索，不得虚构论文。";
+
 export function parseAiSearchPlan(content: string): AiSearchPlan | null {
   const cleaned = content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   try {
@@ -42,33 +45,26 @@ export async function buildAiSearchPlan(
   if (!apiKey || !baseUrl || !model) return null;
 
   try {
-    const response = await fetcher(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    const anthropicCompatible = baseUrl.includes("/api/anthropic");
+    const response = await fetcher(`${baseUrl.replace(/\/$/, "")}/${anthropicCompatible ? "v1/messages" : "chat/completions"}`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.1,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content:
-              "你是学术检索词规划器。只返回 JSON：topics、keywordsZh、keywordsEn、filters、explanation。filters 仅可含 fromYear、toYear、type、language、isOpenAccess、sort；关键词应适合 OpenAlex 题名与摘要检索，不得虚构论文。",
-          },
-          { role: "user", content: query },
-        ],
-      }),
+      headers: anthropicCompatible
+        ? { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" }
+        : { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify(anthropicCompatible
+        ? { model, max_tokens: 800, temperature: 0.1, system: SYSTEM_PROMPT, messages: [{ role: "user", content: query }] }
+        : { model, temperature: 0.1, response_format: { type: "json_object" }, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: query }] }),
       signal: AbortSignal.timeout(12_000),
     });
     if (!response.ok) return null;
 
     const data = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
+      content?: Array<{ type?: string; text?: string }>;
     };
-    const content = data.choices?.[0]?.message?.content;
+    const content = anthropicCompatible
+      ? data.content?.find((item) => item.type === "text")?.text
+      : data.choices?.[0]?.message?.content;
     return content ? parseAiSearchPlan(content) : null;
   } catch {
     return null;
