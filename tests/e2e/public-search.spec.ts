@@ -144,3 +144,31 @@ test("AI fallback reports the reason in a delayed toast", async ({ page }) => {
   await expect(toast).toContainText("本次未计入今日额度");
   await expect(toast).toContainText("GLM API 密钥");
 });
+
+test("successful backup parsing reports the model switch without claiming a free attempt", async ({ page }) => {
+  await page.route("**/api/search", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        works: [], total: 0, nextCursor: null,
+        aiPlan: {
+          topics: ["生成式人工智能"], keywordsZh: ["生成式人工智能"],
+          keywordsEn: ["generative AI"], filters: {}, explanation: "扩展检索词",
+        },
+        aiFallback: false,
+        aiError: null,
+        aiNotice: "优先模型暂时不可用，已由 SiliconFlow（DeepSeek）完成智能解析",
+        aiProvider: "SiliconFlow",
+        aiModel: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
+        remainingAiUses: 1,
+        historySaved: true,
+      }),
+    });
+  });
+
+  await page.goto("/search?q=生成式人工智能&mode=ai");
+
+  const notice = page.getByRole("alert").filter({ hasText: "已由 SiliconFlow" });
+  await expect(notice).toContainText("已由 SiliconFlow");
+  await expect(notice).not.toContainText("本次未计入今日额度");
+});

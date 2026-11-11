@@ -24,7 +24,7 @@ const aiSearchPlanSchema = z.object({
 export type AiSearchPlan = z.infer<typeof aiSearchPlanSchema>;
 export type AiProvider = "GLM" | "SiliconFlow";
 export type AiSearchPlanResult =
-  | { plan: AiSearchPlan; error: null; provider: AiProvider; model: string }
+  | { plan: AiSearchPlan; error: null; provider: AiProvider; model: string; notice: string | null }
   | { plan: null; error: string };
 
 type ModelConfig = {
@@ -92,6 +92,9 @@ export async function buildAiSearchPlan(
         error: null,
         provider: config.provider,
         model: config.model,
+        notice: index > 0
+          ? `优先模型暂时不可用，已由 ${config.provider}（${config.model}）完成智能解析`
+          : null,
       };
     }
     lastError = attempt.error;

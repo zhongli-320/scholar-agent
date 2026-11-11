@@ -96,6 +96,7 @@ describe("executeSearch", () => {
           error: null,
           provider: "SiliconFlow",
           model: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
+          notice: "优先模型暂时不可用，已由 SiliconFlow 完成智能解析",
         }),
         consumeAiQuota: async () => {
           consumed += 1;
@@ -107,6 +108,7 @@ describe("executeSearch", () => {
     expect(consumed).toBe(1);
     expect(response.aiProvider).toBe("SiliconFlow");
     expect(response.aiModel).toBe("deepseek-ai/DeepSeek-R1-0528-Qwen3-8B");
+    expect(response.aiNotice).toBe("优先模型暂时不可用，已由 SiliconFlow 完成智能解析");
   });
 
   it("applies validated AI filters while preserving explicit user filters", async () => {
@@ -126,6 +128,7 @@ describe("executeSearch", () => {
           error: null,
           provider: "GLM",
           model: "glm-5.3-flash",
+          notice: null,
         }),
         searchWorks: async (request) => {
           searchedRequest = request;

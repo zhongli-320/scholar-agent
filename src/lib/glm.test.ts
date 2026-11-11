@@ -63,7 +63,7 @@ describe("buildAiSearchPlan", () => {
       return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify(plan) }] }));
     });
 
-    expect(result).toEqual({ plan, error: null, provider: "GLM", model: "glm-5.3-flash" });
+    expect(result).toEqual({ plan, error: null, provider: "GLM", model: "glm-5.3-flash", notice: null });
     expect(requests[0].url).toBe("https://open.bigmodel.cn/api/anthropic/v1/messages");
     expect(new Headers(requests[0].init?.headers).get("x-api-key")).toBe("glm-key");
     expect(JSON.parse(String(requests[0].init?.body))).toMatchObject({ model: "glm-5.3-flash", max_tokens: 800 });
@@ -91,6 +91,7 @@ describe("buildAiSearchPlan", () => {
       error: null,
       provider: "SiliconFlow",
       model: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
+      notice: "优先模型暂时不可用，已由 SiliconFlow（deepseek-ai/DeepSeek-R1-0528-Qwen3-8B）完成智能解析",
     });
   });
 

@@ -28,19 +28,20 @@ export function SearchResults() {
   const [data, setData] = useState<SearchServiceResponse | null>(null);
   const [loading, setLoading] = useState(Boolean(query));
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; fallback: boolean } | null>(null);
   const [related, setRelated] = useState<SearchSuggestions>({ terms: [], queries: [] });
   const [relatedError, setRelatedError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!data?.aiError) return;
-    const show = window.setTimeout(() => setToast(data.aiError), 600);
+    const message = data?.aiError ?? data?.aiNotice;
+    if (!message) return;
+    const show = window.setTimeout(() => setToast({ message, fallback: Boolean(data?.aiError) }), 600);
     const hide = window.setTimeout(() => setToast(null), 8_600);
     return () => {
       window.clearTimeout(show);
       window.clearTimeout(hide);
     };
-  }, [data?.aiError]);
+  }, [data?.aiError, data?.aiNotice]);
 
   useEffect(() => {
     if (!data || data.aiPlan) return;
@@ -124,9 +125,9 @@ export function SearchResults() {
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       {toast && (
-        <div role="alert" className="fixed right-4 top-20 z-50 max-w-sm rounded-xl border border-amber-300 bg-amber-50 p-4 pr-12 text-sm text-amber-950 shadow-lg">
-          <p>{toast}。本次未计入今日额度，已退回原始关键词检索。</p>
-          <button type="button" aria-label="关闭错误提示" onClick={() => setToast(null)} className="absolute right-2 top-2 min-h-8 min-w-8 rounded-lg text-lg hover:bg-amber-100">×</button>
+        <div role="alert" className={`fixed right-4 top-20 z-50 max-w-sm rounded-xl border p-4 pr-12 text-sm shadow-lg ${toast.fallback ? "border-amber-300 bg-amber-50 text-amber-950" : "border-indigo-200 bg-indigo-50 text-indigo-950"}`}>
+          <p>{toast.message}{toast.fallback ? "。本次未计入今日额度，已退回原始关键词检索。" : "。"}</p>
+          <button type="button" aria-label="关闭提示" onClick={() => setToast(null)} className="absolute right-2 top-2 min-h-8 min-w-8 rounded-lg text-lg hover:bg-white/50">×</button>
         </div>
       )}
       <div className="mb-7"><SearchForm initialQuery={query} /></div>

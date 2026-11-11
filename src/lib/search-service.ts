@@ -30,6 +30,7 @@ export type SearchServiceResponse = {
   aiPlan: AiSearchPlan | null;
   aiFallback: boolean;
   aiError: string | null;
+  aiNotice: string | null;
   aiProvider: AiProvider | null;
   aiModel: string | null;
   remainingAiUses: number | null;
@@ -52,6 +53,7 @@ export async function executeSearch(
   const user = await dependencies.getUser();
   let aiPlan: AiSearchPlan | null = null;
   let aiError: string | null = null;
+  let aiNotice: string | null = null;
   let aiProvider: AiProvider | null = null;
   let aiModel: string | null = null;
   let remainingAiUses: number | null = null;
@@ -68,6 +70,7 @@ export async function executeSearch(
       aiPlan = attempt.plan;
       aiProvider = attempt.provider;
       aiModel = attempt.model;
+      aiNotice = attempt.notice;
       remainingAiUses = await dependencies.consumeAiQuota();
       if (remainingAiUses < 0) {
         throw new SearchServiceError("今日智能检索额度已用完，仍可使用普通检索", 429);
@@ -106,6 +109,7 @@ export async function executeSearch(
     aiPlan,
     aiFallback: request.mode === "ai" && !aiPlan,
     aiError,
+    aiNotice,
     aiProvider,
     aiModel,
     remainingAiUses,
