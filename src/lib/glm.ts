@@ -133,7 +133,7 @@ export async function buildAiSuggestions(
       fetcher,
       SUGGESTIONS_SYSTEM_PROMPT,
       parseAiSuggestions,
-      400,
+      800,
       12_000,
     );
     if (attempt.value) return attempt.value;
