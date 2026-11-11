@@ -16,7 +16,7 @@ npm run dev
 
 - `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`：可公开的 Supabase 客户端配置。
 - `GLM_API_KEY`、`GLM_BASE_URL`：智谱官方服务端配置。
-- `GLM_MODEL=glm-5.3-flash`：第一优先模型；`GLM_FALLBACK_MODEL=GLM-4.7-Flash`：同平台备用模型。
+- `GLM_MODEL=glm-5.3-flash`：第一优先模型；`GLM_FALLBACK_API_KEY`、`GLM_FALLBACK_MODEL=GLM-4.7-Flash`：同平台备用密钥与模型。
 - `SILICONFLOW_API_KEY`、`SILICONFLOW_BASE_URL`、`SILICONFLOW_MODEL`：第三优先的 SiliconFlow 备用模型，仅存放在服务端。
 - `OPENALEX_API_KEY`：OpenAlex 服务端 API key。2026 年 11 月后，公开应用和游标翻页需要该 key；不要提交到 Git。
 - `OPENALEX_MAILTO`：请求联系人，保留用于兼容和运维标识。
