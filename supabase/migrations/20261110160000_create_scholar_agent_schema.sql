@@ -87,7 +87,7 @@ begin
   if caller is null then
     raise exception 'authentication required';
   end if;
-  if daily_limit < 1 or daily_limit > 100 then
+  if daily_limit <> 2 then
     raise exception 'invalid daily limit';
   end if;
 

@@ -21,6 +21,11 @@ textarea {
   font: inherit;
 }
 
+button:not(:disabled),
+a {
+  cursor: pointer;
+}
+
 :focus-visible {
   outline: 3px solid #a5b4fc;
   outline-offset: 2px;
