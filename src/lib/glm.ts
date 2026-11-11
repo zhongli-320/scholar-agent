@@ -134,7 +134,7 @@ export async function buildAiSuggestions(
       SUGGESTIONS_SYSTEM_PROMPT,
       parseAiSuggestions,
       400,
-      6_000,
+      12_000,
     );
     if (attempt.value) return attempt.value;
     if (!attempt.retryable) return null;
