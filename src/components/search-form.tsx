@@ -12,6 +12,7 @@ export function SearchForm({ initialQuery = "" }: { initialQuery?: string }) {
   const [suggestions, setSuggestions] = useState<SearchSuggestions>({ terms: [], queries: [] });
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const formRef = useRef<HTMLFormElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const options = [...suggestions.terms, ...suggestions.queries];
 
@@ -48,6 +49,18 @@ export function SearchForm({ initialQuery = "" }: { initialQuery?: string }) {
     };
   }, [edited, query]);
 
+  useEffect(() => {
+    if (!options.length && !suggestionError) return;
+    function closeSuggestions(event: PointerEvent) {
+      if (formRef.current?.contains(event.target as Node)) return;
+      setSuggestions({ terms: [], queries: [] });
+      setSuggestionError(null);
+      setActiveIndex(-1);
+    }
+    document.addEventListener("pointerdown", closeSuggestions);
+    return () => document.removeEventListener("pointerdown", closeSuggestions);
+  }, [options.length, suggestionError]);
+
   function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
@@ -82,7 +95,7 @@ export function SearchForm({ initialQuery = "" }: { initialQuery?: string }) {
   }
 
   return (
-    <form onSubmit={search} className="rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-xl shadow-slate-200/60">
+    <form ref={formRef} onSubmit={search} className="rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-xl shadow-slate-200/60">
       <label htmlFor="search-query" className="sr-only">研究问题或关键词</label>
       <div className="relative">
         <textarea

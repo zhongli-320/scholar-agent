@@ -5,6 +5,7 @@ import {
   buildOpenAlexWorksUrl,
   normalizeOpenAlexWork,
   reconstructAbstract,
+  searchOpenAlex,
 } from "./openalex";
 
 describe("buildOpenAlexHeaders", () => {
@@ -72,6 +73,28 @@ describe("reconstructAbstract", () => {
 
   it("returns null when OpenAlex has no abstract", () => {
     expect(reconstructAbstract(null)).toBeNull();
+  });
+});
+
+describe("searchOpenAlex", () => {
+  it("returns the actual search, filter and sort expression sent to OpenAlex", async () => {
+    const result = await searchOpenAlex(
+      {
+        query: "生成式人工智能",
+        mode: "basic",
+        fromYear: 2022,
+        language: "zh",
+        sort: "cited",
+      },
+      async () => new Response(JSON.stringify({
+        meta: { count: 0, next_cursor: null },
+        results: [],
+      })),
+    );
+
+    expect((result as typeof result & { searchExpression?: string }).searchExpression).toBe(
+      'search="生成式人工智能" AND filter=(from_publication_date:2022-01-01,language:zh) SORT cited_by_count:desc',
+    );
   });
 });
 

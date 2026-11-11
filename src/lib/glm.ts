@@ -21,7 +21,18 @@ const aiSearchPlanSchema = z.object({
   explanation: z.string().trim().min(1).max(300),
 });
 
+const aiSuggestionsSchema = z.object({
+  terms: z.array(
+    z.string().trim().min(2).max(40).refine(
+      (term) => !/[。！？?!]/u.test(term),
+      "联想词必须是短词组",
+    ),
+  ).min(4).max(6),
+  queries: z.array(z.string().trim().min(4).max(80)).length(3),
+});
+
 export type AiSearchPlan = z.infer<typeof aiSearchPlanSchema>;
+export type AiSuggestions = z.infer<typeof aiSuggestionsSchema>;
 export type AiProvider = "GLM" | "SiliconFlow";
 export type AiSearchPlanResult =
   | { plan: AiSearchPlan; error: null; provider: AiProvider; model: string; notice: string | null }
@@ -34,12 +45,14 @@ type ModelConfig = {
   model: string;
 };
 
-type ModelAttempt =
-  | { plan: AiSearchPlan; error: null }
-  | { plan: null; error: string; retryable: boolean };
+type ModelAttempt<T> =
+  | { value: T; error: null }
+  | { value: null; error: string; retryable: boolean };
 
 const SYSTEM_PROMPT =
   "你是学术检索词规划器。只返回 JSON：topics、keywordsZh、keywordsEn、filters、explanation。filters 仅可含 fromYear、toYear、type、language、isOpenAccess、sort；关键词应适合 OpenAlex 题名与摘要检索，不得虚构论文。";
+const SUGGESTIONS_SYSTEM_PROMPT =
+  "你是学术检索联想生成器。只返回 JSON：terms、queries。terms 必须包含4至6个与输入直接相关的短学术词组，不得写完整句子、不得加序号、不得重复输入；queries 必须包含3个与输入同语种、可直接用于检索的自然学术表达，分别覆盖研究进展、时代或情境、应用或问题，不得照抄论文题名。例如输入‘信息组织’，queries 可包括‘信息组织研究进展’、‘数智化时代的信息组织’、‘信息组织的应用与挑战’。";
 
 export function parseAiSearchPlan(content: string): AiSearchPlan | null {
   const cleaned = content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
@@ -50,46 +63,43 @@ export function parseAiSearchPlan(content: string): AiSearchPlan | null {
   }
 }
 
+export function parseAiSuggestions(content: string): AiSuggestions | null {
+  const cleaned = content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  try {
+    return aiSuggestionsSchema.parse(JSON.parse(cleaned));
+  } catch {
+    return null;
+  }
+}
+
 export async function buildAiSearchPlan(
   query: string,
   fetcher: typeof fetch = fetch,
 ): Promise<AiSearchPlanResult> {
-  const apiKey = process.env.GLM_API_KEY;
-  const baseUrl = process.env.GLM_BASE_URL;
-  const model = process.env.GLM_MODEL;
-  if (!apiKey || !baseUrl || !model) {
+  const configs = configuredModels();
+  if (!configs.length) {
     console.error("GLM configuration is incomplete", {
-      apiKey: Boolean(apiKey),
-      baseUrl: Boolean(baseUrl),
-      model: Boolean(model),
+      apiKey: Boolean(process.env.GLM_API_KEY),
+      baseUrl: Boolean(process.env.GLM_BASE_URL),
+      model: Boolean(process.env.GLM_MODEL),
     });
     return { plan: null, error: "智能解析服务配置不完整，请联系管理员" };
   }
 
-  const configs: ModelConfig[] = [{ provider: "GLM", apiKey, baseUrl, model }];
-  const fallbackApiKey = process.env.GLM_FALLBACK_API_KEY || apiKey;
-  const fallbackModel = process.env.GLM_FALLBACK_MODEL;
-  if (fallbackModel && fallbackModel !== model) {
-    configs.push({ provider: "GLM", apiKey: fallbackApiKey, baseUrl, model: fallbackModel });
-  }
-  const siliconApiKey = process.env.SILICONFLOW_API_KEY;
-  const siliconBaseUrl = process.env.SILICONFLOW_BASE_URL;
-  const siliconModel = process.env.SILICONFLOW_MODEL;
-  if (siliconApiKey && siliconBaseUrl && siliconModel) {
-    configs.push({
-      provider: "SiliconFlow",
-      apiKey: siliconApiKey,
-      baseUrl: siliconBaseUrl,
-      model: siliconModel,
-    });
-  }
-
   let lastError = "智能解析服务暂时不可用，请稍后重试";
   for (const [index, config] of configs.entries()) {
-    const attempt = await requestAiSearchPlan(config, query, fetcher);
-    if (attempt.plan) {
+    const attempt = await requestStructuredOutput(
+      config,
+      query,
+      fetcher,
+      SYSTEM_PROMPT,
+      parseAiSearchPlan,
+      800,
+      12_000,
+    );
+    if (attempt.value) {
       return {
-        plan: attempt.plan,
+        plan: attempt.value,
         error: null,
         provider: config.provider,
         model: config.model,
@@ -112,11 +122,65 @@ export async function buildAiSearchPlan(
   return { plan: null, error: lastError };
 }
 
-async function requestAiSearchPlan(
+export async function buildAiSuggestions(
+  query: string,
+  fetcher: typeof fetch = fetch,
+): Promise<AiSuggestions | null> {
+  for (const config of configuredModels()) {
+    const attempt = await requestStructuredOutput(
+      config,
+      query,
+      fetcher,
+      SUGGESTIONS_SYSTEM_PROMPT,
+      parseAiSuggestions,
+      400,
+      6_000,
+    );
+    if (attempt.value) return attempt.value;
+    if (!attempt.retryable) return null;
+  }
+  return null;
+}
+
+function configuredModels(): ModelConfig[] {
+  const apiKey = process.env.GLM_API_KEY;
+  const baseUrl = process.env.GLM_BASE_URL;
+  const model = process.env.GLM_MODEL;
+  if (!apiKey || !baseUrl || !model) return [];
+
+  const configs: ModelConfig[] = [{ provider: "GLM", apiKey, baseUrl, model }];
+  const fallbackModel = process.env.GLM_FALLBACK_MODEL;
+  if (fallbackModel && fallbackModel !== model) {
+    configs.push({
+      provider: "GLM",
+      apiKey: process.env.GLM_FALLBACK_API_KEY || apiKey,
+      baseUrl,
+      model: fallbackModel,
+    });
+  }
+  const siliconApiKey = process.env.SILICONFLOW_API_KEY;
+  const siliconBaseUrl = process.env.SILICONFLOW_BASE_URL;
+  const siliconModel = process.env.SILICONFLOW_MODEL;
+  if (siliconApiKey && siliconBaseUrl && siliconModel) {
+    configs.push({
+      provider: "SiliconFlow",
+      apiKey: siliconApiKey,
+      baseUrl: siliconBaseUrl,
+      model: siliconModel,
+    });
+  }
+  return configs;
+}
+
+async function requestStructuredOutput<T>(
   config: ModelConfig,
   query: string,
   fetcher: typeof fetch,
-): Promise<ModelAttempt> {
+  systemPrompt: string,
+  parse: (content: string) => T | null,
+  maxTokens: number,
+  timeout: number,
+): Promise<ModelAttempt<T>> {
   try {
     const anthropicCompatible = config.baseUrl.includes("/api/anthropic");
     const response = await fetcher(`${config.baseUrl.replace(/\/$/, "")}/${anthropicCompatible ? "v1/messages" : "chat/completions"}`, {
@@ -125,9 +189,9 @@ async function requestAiSearchPlan(
         ? { "x-api-key": config.apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" }
         : { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify(anthropicCompatible
-        ? { model: config.model, max_tokens: 800, temperature: 0.1, system: SYSTEM_PROMPT, messages: [{ role: "user", content: query }] }
-        : { model: config.model, temperature: 0.1, enable_thinking: false, response_format: { type: "json_object" }, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: query }] }),
-      signal: AbortSignal.timeout(12_000),
+        ? { model: config.model, max_tokens: maxTokens, temperature: 0.1, system: systemPrompt, messages: [{ role: "user", content: query }] }
+        : { model: config.model, temperature: 0.1, enable_thinking: false, response_format: { type: "json_object" }, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: query }] }),
+      signal: AbortSignal.timeout(timeout),
     });
     if (!response.ok) {
       const detail = (await response.text()).slice(0, 500);
@@ -138,7 +202,7 @@ async function requestAiSearchPlan(
         detail,
       });
       return {
-        plan: null,
+        value: null,
         error: modelHttpError(config.provider, response.status),
         retryable: isTemporaryStatus(response.status),
       };
@@ -151,16 +215,16 @@ async function requestAiSearchPlan(
     const content = anthropicCompatible
       ? data.content?.find((item) => item.type === "text")?.text
       : data.choices?.[0]?.message?.content;
-    const plan = content ? parseAiSearchPlan(content) : null;
-    if (!plan) {
+    const value = content ? parse(content) : null;
+    if (!value) {
       console.error("AI model returned invalid structured output", {
         provider: config.provider,
         model: config.model,
         content: content?.slice(0, 500),
       });
-      return { plan: null, error: "智能解析返回格式无效", retryable: false };
+      return { value: null, error: "智能解析返回格式无效", retryable: false };
     }
-    return { plan, error: null };
+    return { value, error: null };
   } catch (error) {
     console.error("AI model request threw", {
       provider: config.provider,
@@ -168,7 +232,7 @@ async function requestAiSearchPlan(
       error,
     });
     return {
-      plan: null,
+      value: null,
       error: error instanceof Error && error.name === "TimeoutError"
         ? "智能解析请求超时"
         : "无法连接智能解析服务",
