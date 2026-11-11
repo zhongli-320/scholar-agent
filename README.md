@@ -15,7 +15,9 @@ npm run dev
 在 `.env.local` 中填写：
 
 - `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`：可公开的 Supabase 客户端配置。
-- `GLM_API_KEY`、`GLM_BASE_URL`、`GLM_MODEL`：仅供服务端智能检索使用。
+- `GLM_API_KEY`、`GLM_BASE_URL`：智谱官方服务端配置。
+- `GLM_MODEL=glm-5.3-flash`：第一优先模型；`GLM_FALLBACK_MODEL=GLM-4.7-Flash`：同平台备用模型。
+- `SILICONFLOW_API_KEY`、`SILICONFLOW_BASE_URL`、`SILICONFLOW_MODEL`：第三优先的 SiliconFlow 备用模型，仅存放在服务端。
 - `OPENALEX_API_KEY`：OpenAlex 服务端 API key。2026 年 11 月后，公开应用和游标翻页需要该 key；不要提交到 Git。
 - `OPENALEX_MAILTO`：请求联系人，保留用于兼容和运维标识。
 - `AI_DAILY_LIMIT=2`：每账户每日智能检索次数。
@@ -45,3 +47,5 @@ npm run test:e2e
 4. 用匿名窗口验证普通检索；用两个账户验证 RLS、每日两次额度、项目和历史隔离。
 
 OpenAlex 的免费 key 有每日预算，中文覆盖范围取决于 OpenAlex 实际收录。
+
+智能检索依次调用 `glm-5.3-flash`、GLM 4.7 和 SiliconFlow。只有超时、网络错误、429、529 或 5xx 才会切换备用模型；鉴权、地址或模型配置错误会直接提示。任一模型生成有效检索方案后才扣一次额度，全部失败则不扣额度并退回普通检索。

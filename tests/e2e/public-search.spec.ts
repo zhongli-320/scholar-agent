@@ -1,6 +1,18 @@
 import { expect, test } from "@playwright/test";
 
 test("homepage exposes the approved navigation and starts a basic search", async ({ page }) => {
+  await page.route("**/api/suggestions**", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ terms: [], queries: [] }) });
+  });
+  await page.route("**/api/search", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        works: [], total: 0, nextCursor: null, aiPlan: null, aiFallback: false,
+        aiError: null, aiProvider: null, aiModel: null, remainingAiUses: null, historySaved: false,
+      }),
+    });
+  });
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "把研究问题变成可信的文献线索" })).toBeVisible();
@@ -107,6 +119,9 @@ test("mobile homepage does not overflow horizontally", async ({ page }) => {
 });
 
 test("AI fallback reports the reason in a delayed toast", async ({ page }) => {
+  await page.route("**/api/suggestions**", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ terms: [], queries: [] }) });
+  });
   await page.route("**/api/search", async (route) => {
     await route.fulfill({
       contentType: "application/json",
