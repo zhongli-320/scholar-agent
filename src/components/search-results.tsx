@@ -7,6 +7,7 @@ import { FormEvent, useEffect, useState } from "react";
 import type { AiSearchPlan } from "@/lib/glm";
 import type { SearchRequest, Work } from "@/lib/openalex";
 import type { SearchServiceResponse } from "@/lib/search-service";
+import { buildRelatedQueries, type SearchSuggestions } from "@/lib/suggestions";
 import { SearchForm } from "./search-form";
 
 type ResponseData = SearchServiceResponse | { error: string };
@@ -27,17 +28,43 @@ export function SearchResults() {
   const [data, setData] = useState<SearchServiceResponse | null>(null);
   const [loading, setLoading] = useState(Boolean(query));
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; fallback: boolean } | null>(null);
+  const [related, setRelated] = useState<SearchSuggestions>({ terms: [], queries: [] });
+  const [relatedError, setRelatedError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!data?.aiError) return;
-    const show = window.setTimeout(() => setToast(data.aiError), 600);
+    const message = data?.aiError ?? data?.aiNotice;
+    if (!message) return;
+    const show = window.setTimeout(() => setToast({ message, fallback: Boolean(data?.aiError) }), 600);
     const hide = window.setTimeout(() => setToast(null), 8_600);
     return () => {
       window.clearTimeout(show);
       window.clearTimeout(hide);
     };
-  }, [data?.aiError]);
+  }, [data?.aiError, data?.aiNotice]);
+
+  useEffect(() => {
+    if (!data || data.aiPlan) return;
+    let cancelled = false;
+    void fetch(`/api/suggestions?q=${encodeURIComponent(query)}`)
+      .then(async (response) => {
+        const result = await response.json() as SearchSuggestions | { error: string };
+        if (!response.ok || "error" in result) {
+          throw new Error("error" in result ? result.error : "联想服务暂时不可用");
+        }
+        return result;
+      })
+      .then((result) => {
+        if (!cancelled) {
+          setRelated(result);
+          setRelatedError(null);
+        }
+      })
+      .catch((reason: unknown) => {
+        if (!cancelled) setRelatedError(reason instanceof Error ? reason.message : "联想服务暂时不可用");
+      });
+    return () => { cancelled = true; };
+  }, [data, query]);
 
   async function loadMore(cursor: string) {
     setLoading(true);
@@ -89,12 +116,18 @@ export function SearchResults() {
     return <main className="mx-auto max-w-3xl px-4 py-16 sm:px-6"><h1 className="mb-6 text-3xl font-bold">检索学术文献</h1><SearchForm /></main>;
   }
 
+  const planTerms = data?.aiPlan
+    ? Array.from(new Set([...data.aiPlan.keywordsZh, ...data.aiPlan.keywordsEn])).slice(0, 6)
+    : null;
+  const relatedTerms = planTerms ?? related.terms;
+  const relatedQueries = planTerms ? buildRelatedQueries(query, planTerms) : related.queries;
+
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       {toast && (
-        <div role="alert" className="fixed right-4 top-20 z-50 max-w-sm rounded-xl border border-amber-300 bg-amber-50 p-4 pr-12 text-sm text-amber-950 shadow-lg">
-          <p>{toast}。本次未计入今日额度，已退回原始关键词检索。</p>
-          <button type="button" aria-label="关闭错误提示" onClick={() => setToast(null)} className="absolute right-2 top-2 min-h-8 min-w-8 rounded-lg text-lg hover:bg-amber-100">×</button>
+        <div role="alert" className={`fixed right-4 top-20 z-50 max-w-sm rounded-xl border p-4 pr-12 text-sm shadow-lg ${toast.fallback ? "border-amber-300 bg-amber-50 text-amber-950" : "border-indigo-200 bg-indigo-50 text-indigo-950"}`}>
+          <p>{toast.message}{toast.fallback ? "。本次未计入今日额度，已退回原始关键词检索。" : "。"}</p>
+          <button type="button" aria-label="关闭提示" onClick={() => setToast(null)} className="absolute right-2 top-2 min-h-8 min-w-8 rounded-lg text-lg hover:bg-white/50">×</button>
         </div>
       )}
       <div className="mb-7"><SearchForm initialQuery={query} /></div>
@@ -125,7 +158,10 @@ export function SearchResults() {
           <dl className="mt-4 space-y-3">
             <Info label="查询词" value={query} />
             <Info label="结果" value={data ? `找到 ${data.total.toLocaleString("zh-CN")} 条结果` : "正在统计"} />
-            {mode === "ai" && <AiInfo plan={data?.aiPlan ?? null} fallback={data?.aiFallback ?? false} />}
+            {mode === "ai" && <AiInfo plan={data?.aiPlan ?? null} fallback={data?.aiFallback ?? false} provider={data?.aiProvider ?? null} model={data?.aiModel ?? null} />}
+            {relatedTerms.length > 0 && <Info label="扩展词" value={relatedTerms.join("、")} />}
+            {relatedQueries.length > 0 && <Info label="联想检索句" value={relatedQueries.join("；")} />}
+            {relatedError && <Info label="检索联想" value={relatedError} />}
             {data?.remainingAiUses !== null && data?.remainingAiUses !== undefined && <Info label="今日剩余" value={`${data.remainingAiUses} 次智能检索`} />}
           </dl>
           <p className="mt-5 border-t border-indigo-200 pt-4 text-slate-600">{data?.historySaved ? "已自动加入检索历史" : "登录后将自动保存检索历史"}</p>
@@ -155,9 +191,9 @@ function Info({ label, value }: { label: string; value: string }) {
   return <div><dt className="font-semibold text-slate-950">{label}</dt><dd className="mt-1 break-words">{value}</dd></div>;
 }
 
-function AiInfo({ plan, fallback }: { plan: AiSearchPlan | null; fallback: boolean }) {
+function AiInfo({ plan, fallback, provider, model }: { plan: AiSearchPlan | null; fallback: boolean; provider: string | null; model: string | null }) {
   if (fallback) return <Info label="智能解析" value="解析失败，已退回原始关键词检索；本次不计入额度" />;
-  return plan ? <><Info label="主题" value={plan.topics.join("、")} /><Info label="扩展关键词" value={[...plan.keywordsZh, ...plan.keywordsEn].join("、")} /></> : null;
+  return plan ? <><Info label="解析模型" value={[provider, model].filter(Boolean).join(" · ")} /><Info label="主题" value={plan.topics.join("、")} /><Info label="扩展关键词" value={[...plan.keywordsZh, ...plan.keywordsEn].join("、")} /></> : null;
 }
 
 function Status({ children, tone = "default" }: { children: React.ReactNode; tone?: "default" | "error" }) {

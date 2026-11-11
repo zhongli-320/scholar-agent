@@ -1,6 +1,18 @@
 import { expect, test } from "@playwright/test";
 
 test("homepage exposes the approved navigation and starts a basic search", async ({ page }) => {
+  await page.route("**/api/suggestions**", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ terms: [], queries: [] }) });
+  });
+  await page.route("**/api/search", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        works: [], total: 0, nextCursor: null, aiPlan: null, aiFallback: false,
+        aiError: null, aiProvider: null, aiModel: null, remainingAiUses: null, historySaved: false,
+      }),
+    });
+  });
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "把研究问题变成可信的文献线索" })).toBeVisible();
@@ -17,7 +29,37 @@ test("homepage exposes the approved navigation and starts a basic search", async
   await expect(page).toHaveURL(/\/search\?q=.*&mode=basic/);
 });
 
+test("typing shows suggestions and selecting one only fills the search box", async ({ page }) => {
+  await page.route("**/api/suggestions**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        terms: ["教育技术"],
+        queries: ["生成式人工智能与教育技术的关系"],
+      }),
+    });
+  });
+  await page.goto("/");
+
+  const input = page.getByLabel("研究问题或关键词");
+  await input.fill("生成式");
+  await expect(page.getByRole("option", { name: "生成式人工智能与教育技术的关系" })).toBeVisible();
+  await page.getByRole("option", { name: "生成式人工智能与教育技术的关系" }).click();
+
+  await expect(input).toHaveValue("生成式人工智能与教育技术的关系");
+  await expect(page).toHaveURL(/\/$/);
+});
+
 test("results use the approved three-column content and automatic history message", async ({ page }) => {
+  await page.route("**/api/suggestions**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        terms: ["教育技术", "信息行为"],
+        queries: ["生成式人工智能与教育技术的关系"],
+      }),
+    });
+  });
   await page.route("**/api/search", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -61,6 +103,8 @@ test("results use the approved three-column content and automatic history messag
   await expect(page.getByRole("heading", { name: "生成式人工智能与信息行为" })).toBeVisible();
   await expect(page.getByRole("complementary", { name: "智能检索说明" })).toContainText("找到 128 条结果");
   await expect(page.getByRole("complementary", { name: "智能检索说明" })).toContainText("已自动加入检索历史");
+  await expect(page.getByRole("complementary", { name: "智能检索说明" })).toContainText("教育技术");
+  await expect(page.getByRole("complementary", { name: "智能检索说明" })).toContainText("生成式人工智能与教育技术的关系");
   await expect(page.getByRole("button", { name: "保存本次检索" })).toHaveCount(0);
 });
 
@@ -75,6 +119,9 @@ test("mobile homepage does not overflow horizontally", async ({ page }) => {
 });
 
 test("AI fallback reports the reason in a delayed toast", async ({ page }) => {
+  await page.route("**/api/suggestions**", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ terms: [], queries: [] }) });
+  });
   await page.route("**/api/search", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -96,4 +143,32 @@ test("AI fallback reports the reason in a delayed toast", async ({ page }) => {
   const toast = page.getByRole("alert").filter({ hasText: "本次未计入今日额度" });
   await expect(toast).toContainText("本次未计入今日额度");
   await expect(toast).toContainText("GLM API 密钥");
+});
+
+test("successful backup parsing reports the model switch without claiming a free attempt", async ({ page }) => {
+  await page.route("**/api/search", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        works: [], total: 0, nextCursor: null,
+        aiPlan: {
+          topics: ["生成式人工智能"], keywordsZh: ["生成式人工智能"],
+          keywordsEn: ["generative AI"], filters: {}, explanation: "扩展检索词",
+        },
+        aiFallback: false,
+        aiError: null,
+        aiNotice: "优先模型暂时不可用，已由 SiliconFlow（DeepSeek）完成智能解析",
+        aiProvider: "SiliconFlow",
+        aiModel: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
+        remainingAiUses: 1,
+        historySaved: true,
+      }),
+    });
+  });
+
+  await page.goto("/search?q=生成式人工智能&mode=ai");
+
+  const notice = page.getByRole("alert").filter({ hasText: "已由 SiliconFlow" });
+  await expect(notice).toContainText("已由 SiliconFlow");
+  await expect(notice).not.toContainText("本次未计入今日额度");
 });
