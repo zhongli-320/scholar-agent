@@ -79,6 +79,36 @@ describe("executeSearch", () => {
     expect(response.remainingAiUses).toBe(2);
   });
 
+  it("reports the model that completed AI parsing and consumes quota once", async () => {
+    let consumed = 0;
+    const response = await executeSearch(
+      { query: "信息行为", mode: "ai", sort: "relevance" },
+      dependencies({
+        getUser: async () => ({ id: "user-1" }),
+        buildAiPlan: async () => ({
+          plan: {
+            topics: ["信息行为"],
+            keywordsZh: ["信息行为"],
+            keywordsEn: ["information behavior"],
+            filters: {},
+            explanation: "扩展中英文检索词",
+          },
+          error: null,
+          provider: "SiliconFlow",
+          model: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
+        }),
+        consumeAiQuota: async () => {
+          consumed += 1;
+          return 1;
+        },
+      }),
+    );
+
+    expect(consumed).toBe(1);
+    expect(response.aiProvider).toBe("SiliconFlow");
+    expect(response.aiModel).toBe("deepseek-ai/DeepSeek-R1-0528-Qwen3-8B");
+  });
+
   it("applies validated AI filters while preserving explicit user filters", async () => {
     let searchedRequest: Parameters<SearchDependencies["searchWorks"]>[0] | null = null;
     await executeSearch(
@@ -94,6 +124,8 @@ describe("executeSearch", () => {
             explanation: "提取年份和语言条件",
           },
           error: null,
+          provider: "GLM",
+          model: "glm-5.3-flash",
         }),
         searchWorks: async (request) => {
           searchedRequest = request;
