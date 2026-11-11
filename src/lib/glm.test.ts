@@ -16,6 +16,7 @@ function configureProviders() {
   vi.stubEnv("GLM_API_KEY", "glm-key");
   vi.stubEnv("GLM_BASE_URL", "https://open.bigmodel.cn/api/anthropic");
   vi.stubEnv("GLM_MODEL", "glm-5.3-flash");
+  vi.stubEnv("GLM_FALLBACK_API_KEY", "glm-fallback-key");
   vi.stubEnv("GLM_FALLBACK_MODEL", "GLM-4.7-Flash");
   vi.stubEnv("SILICONFLOW_API_KEY", "silicon-key");
   vi.stubEnv("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1");
@@ -93,6 +94,23 @@ describe("buildAiSearchPlan", () => {
       model: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
       notice: "优先模型暂时不可用，已由 SiliconFlow（deepseek-ai/DeepSeek-R1-0528-Qwen3-8B）完成智能解析",
     });
+  });
+
+  it("uses the fallback GLM key for the fallback GLM model", async () => {
+    configureProviders();
+    const requests: Array<[string, string | null]> = [];
+
+    await buildAiSearchPlan("中文生成式人工智能研究", async (_url, init) => {
+      const model = JSON.parse(String(init?.body)).model as string;
+      requests.push([model, new Headers(init?.headers).get("x-api-key")]);
+      if (model === "glm-5.3-flash") return new Response("overloaded", { status: 529 });
+      return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify(plan) }] }));
+    });
+
+    expect(requests).toEqual([
+      ["glm-5.3-flash", "glm-key"],
+      ["GLM-4.7-Flash", "glm-fallback-key"],
+    ]);
   });
 
   it("returns an actionable error when GLM rejects the credentials", async () => {

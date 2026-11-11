@@ -67,9 +67,10 @@ export async function buildAiSearchPlan(
   }
 
   const configs: ModelConfig[] = [{ provider: "GLM", apiKey, baseUrl, model }];
+  const fallbackApiKey = process.env.GLM_FALLBACK_API_KEY || apiKey;
   const fallbackModel = process.env.GLM_FALLBACK_MODEL;
   if (fallbackModel && fallbackModel !== model) {
-    configs.push({ provider: "GLM", apiKey, baseUrl, model: fallbackModel });
+    configs.push({ provider: "GLM", apiKey: fallbackApiKey, baseUrl, model: fallbackModel });
   }
   const siliconApiKey = process.env.SILICONFLOW_API_KEY;
   const siliconBaseUrl = process.env.SILICONFLOW_BASE_URL;
