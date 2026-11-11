@@ -17,7 +17,37 @@ test("homepage exposes the approved navigation and starts a basic search", async
   await expect(page).toHaveURL(/\/search\?q=.*&mode=basic/);
 });
 
+test("typing shows suggestions and selecting one only fills the search box", async ({ page }) => {
+  await page.route("**/api/suggestions**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        terms: ["教育技术"],
+        queries: ["生成式人工智能与教育技术的关系"],
+      }),
+    });
+  });
+  await page.goto("/");
+
+  const input = page.getByLabel("研究问题或关键词");
+  await input.fill("生成式");
+  await expect(page.getByRole("option", { name: "生成式人工智能与教育技术的关系" })).toBeVisible();
+  await page.getByRole("option", { name: "生成式人工智能与教育技术的关系" }).click();
+
+  await expect(input).toHaveValue("生成式人工智能与教育技术的关系");
+  await expect(page).toHaveURL(/\/$/);
+});
+
 test("results use the approved three-column content and automatic history message", async ({ page }) => {
+  await page.route("**/api/suggestions**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        terms: ["教育技术", "信息行为"],
+        queries: ["生成式人工智能与教育技术的关系"],
+      }),
+    });
+  });
   await page.route("**/api/search", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -61,6 +91,8 @@ test("results use the approved three-column content and automatic history messag
   await expect(page.getByRole("heading", { name: "生成式人工智能与信息行为" })).toBeVisible();
   await expect(page.getByRole("complementary", { name: "智能检索说明" })).toContainText("找到 128 条结果");
   await expect(page.getByRole("complementary", { name: "智能检索说明" })).toContainText("已自动加入检索历史");
+  await expect(page.getByRole("complementary", { name: "智能检索说明" })).toContainText("教育技术");
+  await expect(page.getByRole("complementary", { name: "智能检索说明" })).toContainText("生成式人工智能与教育技术的关系");
   await expect(page.getByRole("button", { name: "保存本次检索" })).toHaveCount(0);
 });
 
