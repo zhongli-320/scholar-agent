@@ -42,25 +42,22 @@ describe("getOpenAlexSuggestions", () => {
     });
   });
 
-  it("uses work titles only as query suggestions when Chinese keyword autocomplete is empty", async () => {
-    const requestPaths: string[] = [];
-    const suggestions = await getOpenAlexSuggestions("人工智能", async (url) => {
-      requestPaths.push(new URL(String(url)).pathname);
-      const results = requestPaths.length === 1
-        ? []
-        : [
-            { display_name: "人工智能" },
-            { display_name: "人工智能时代的本科翻译教学" },
-            { display_name: "人工智能赋能高校学生思想政治教育研究" },
-          ];
-      return new Response(JSON.stringify({ results }));
+  it("uses word-based terms and natural queries when keyword autocomplete is empty", async () => {
+    const suggestions = await getOpenAlexSuggestions("信息组织", async () => {
+      return new Response(JSON.stringify({ results: [] }));
     });
 
-    expect(requestPaths).toEqual(["/autocomplete/keywords", "/autocomplete/works"]);
-    expect(suggestions.terms).toEqual([]);
+    expect(suggestions.terms).toEqual([
+      "信息组织理论",
+      "信息组织方法",
+      "信息组织体系",
+      "信息组织技术",
+      "信息组织应用",
+    ]);
     expect(suggestions.queries).toEqual([
-      "人工智能时代的本科翻译教学",
-      "人工智能赋能高校学生思想政治教育研究",
+      "信息组织研究进展",
+      "数智化时代的信息组织",
+      "信息组织的应用与挑战",
     ]);
   });
 });
