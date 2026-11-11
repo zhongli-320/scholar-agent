@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ScholarAgent
 
-## Getting Started
+面向高校学生和研究者的公开学术检索智能体。匿名用户可检索 OpenAlex 并查看论文详情；登录用户可使用 GLM 智能检索、项目收藏、笔记、引用导出和检索历史。
 
-First, run the development server:
+## 本地运行
+
+需要 Node.js 20.9 或更高版本。
 
 ```bash
+npm install
+copy .env.example .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+在 `.env.local` 中填写：
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`：可公开的 Supabase 客户端配置。
+- `GLM_API_KEY`、`GLM_BASE_URL`、`GLM_MODEL`：仅供服务端智能检索使用。
+- `OPENALEX_API_KEY`：OpenAlex 服务端 API key。2026 年 11 月后，公开应用和游标翻页需要该 key；不要提交到 Git。
+- `OPENALEX_MAILTO`：请求联系人，保留用于兼容和运维标识。
+- `AI_DAILY_LIMIT=2`：每账户每日智能检索次数。
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 数据库
 
-## Learn More
+在目标 Supabase 项目的 SQL Editor 执行：
 
-To learn more about Next.js, take a look at the following resources:
+`supabase/migrations/20261110160000_create_scholar_agent_schema.sql`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+迁移会创建 `projects`、`saved_works`、`search_history`、`ai_daily_usage`，启用 RLS，并创建原子额度函数。客户端不得使用 secret/service-role key。
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 验证
 
-## Deploy on Vercel
+```bash
+npm test
+npm run typecheck
+npm run build
+npm run test:e2e
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Vercel 部署
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. 将仓库导入 Vercel。
+2. 在 Production 环境配置 `.env.example` 中的变量。
+3. 部署后，将 Vercel 域名加入 Supabase Authentication 的 Site URL 和 Redirect URLs，回调路径为 `/auth/callback`。
+4. 用匿名窗口验证普通检索；用两个账户验证 RLS、每日两次额度、项目和历史隔离。
+
+OpenAlex 的免费 key 有每日预算，中文覆盖范围取决于 OpenAlex 实际收录。
