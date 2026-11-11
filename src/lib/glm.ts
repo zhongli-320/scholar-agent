@@ -22,6 +22,9 @@ const aiSearchPlanSchema = z.object({
 });
 
 export type AiSearchPlan = z.infer<typeof aiSearchPlanSchema>;
+export type AiSearchPlanResult =
+  | { plan: AiSearchPlan; error: null }
+  | { plan: null; error: string };
 
 const SYSTEM_PROMPT =
   "你是学术检索词规划器。只返回 JSON：topics、keywordsZh、keywordsEn、filters、explanation。filters 仅可含 fromYear、toYear、type、language、isOpenAccess、sort；关键词应适合 OpenAlex 题名与摘要检索，不得虚构论文。";
@@ -38,11 +41,18 @@ export function parseAiSearchPlan(content: string): AiSearchPlan | null {
 export async function buildAiSearchPlan(
   query: string,
   fetcher: typeof fetch = fetch,
-): Promise<AiSearchPlan | null> {
+): Promise<AiSearchPlanResult> {
   const apiKey = process.env.GLM_API_KEY;
   const baseUrl = process.env.GLM_BASE_URL;
   const model = process.env.GLM_MODEL;
-  if (!apiKey || !baseUrl || !model) return null;
+  if (!apiKey || !baseUrl || !model) {
+    console.error("GLM configuration is incomplete", {
+      apiKey: Boolean(apiKey),
+      baseUrl: Boolean(baseUrl),
+      model: Boolean(model),
+    });
+    return { plan: null, error: "智能解析服务配置不完整，请联系管理员" };
+  }
 
   try {
     const anthropicCompatible = baseUrl.includes("/api/anthropic");
@@ -56,7 +66,11 @@ export async function buildAiSearchPlan(
         : { model, temperature: 0.1, response_format: { type: "json_object" }, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: query }] }),
       signal: AbortSignal.timeout(12_000),
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      const detail = (await response.text()).slice(0, 500);
+      console.error("GLM request failed", { status: response.status, detail });
+      return { plan: null, error: glmHttpError(response.status) };
+    }
 
     const data = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
@@ -65,8 +79,27 @@ export async function buildAiSearchPlan(
     const content = anthropicCompatible
       ? data.content?.find((item) => item.type === "text")?.text
       : data.choices?.[0]?.message?.content;
-    return content ? parseAiSearchPlan(content) : null;
-  } catch {
-    return null;
+    const plan = content ? parseAiSearchPlan(content) : null;
+    if (!plan) {
+      console.error("GLM returned invalid structured output", { content: content?.slice(0, 500) });
+      return { plan: null, error: "智能解析返回格式无效" };
+    }
+    return { plan, error: null };
+  } catch (error) {
+    console.error("GLM request threw", error);
+    return {
+      plan: null,
+      error: error instanceof Error && error.name === "TimeoutError"
+        ? "智能解析请求超时"
+        : "无法连接智能解析服务",
+    };
   }
+}
+
+function glmHttpError(status: number) {
+  if (status === 401 || status === 403) return "智能解析鉴权失败，请联系管理员检查 GLM API 密钥";
+  if (status === 404) return "智能解析接口或模型不可用，请联系管理员检查 GLM 地址与模型名";
+  if (status === 429) return "智能解析服务请求过多，请稍后重试";
+  if (status >= 500) return "智能解析服务暂时不可用，请稍后重试";
+  return `智能解析请求失败（GLM ${status}）`;
 }

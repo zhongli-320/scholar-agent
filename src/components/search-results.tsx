@@ -27,6 +27,17 @@ export function SearchResults() {
   const [data, setData] = useState<SearchServiceResponse | null>(null);
   const [loading, setLoading] = useState(Boolean(query));
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!data?.aiError) return;
+    const show = window.setTimeout(() => setToast(data.aiError), 600);
+    const hide = window.setTimeout(() => setToast(null), 8_600);
+    return () => {
+      window.clearTimeout(show);
+      window.clearTimeout(hide);
+    };
+  }, [data?.aiError]);
 
   async function loadMore(cursor: string) {
     setLoading(true);
@@ -80,6 +91,12 @@ export function SearchResults() {
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      {toast && (
+        <div role="alert" className="fixed right-4 top-20 z-50 max-w-sm rounded-xl border border-amber-300 bg-amber-50 p-4 pr-12 text-sm text-amber-950 shadow-lg">
+          <p>{toast}。本次未计入今日额度，已退回原始关键词检索。</p>
+          <button type="button" aria-label="关闭错误提示" onClick={() => setToast(null)} className="absolute right-2 top-2 min-h-8 min-w-8 rounded-lg text-lg hover:bg-amber-100">×</button>
+        </div>
+      )}
       <div className="mb-7"><SearchForm initialQuery={query} /></div>
       <div className="grid items-start gap-6 lg:grid-cols-[220px_minmax(0,1fr)_260px]">
         <section aria-label="检索筛选" className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -139,7 +156,7 @@ function Info({ label, value }: { label: string; value: string }) {
 }
 
 function AiInfo({ plan, fallback }: { plan: AiSearchPlan | null; fallback: boolean }) {
-  if (fallback) return <Info label="智能解析" value="智能解析暂不可用，已退回原始关键词检索" />;
+  if (fallback) return <Info label="智能解析" value="解析失败，已退回原始关键词检索；本次不计入额度" />;
   return plan ? <><Info label="主题" value={plan.topics.join("、")} /><Info label="扩展关键词" value={[...plan.keywordsZh, ...plan.keywordsEn].join("、")} /></> : null;
 }
 

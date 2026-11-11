@@ -12,8 +12,9 @@ const result = {
 function dependencies(overrides: Partial<SearchDependencies> = {}): SearchDependencies {
   return {
     getUser: async () => null,
+    getAiQuota: async () => 2,
     consumeAiQuota: async () => 1,
-    buildAiPlan: async () => null,
+    buildAiPlan: async () => ({ plan: null, error: "智能解析请求失败" }),
     searchWorks: async () => result,
     saveHistory: async () => undefined,
     ...overrides,
@@ -46,19 +47,24 @@ describe("executeSearch", () => {
         { query: "信息行为", mode: "ai", sort: "relevance" },
         dependencies({
           getUser: async () => ({ id: "user-1" }),
-          consumeAiQuota: async () => -1,
+          getAiQuota: async () => 0,
         }),
       ),
     ).rejects.toMatchObject({ status: 429 });
   });
 
-  it("falls back to the original query when GLM output is unusable", async () => {
+  it("does not consume quota when GLM parsing fails", async () => {
     let searchedQuery = "";
+    let quotaConsumed = false;
     const response = await executeSearch(
       { query: "信息行为", mode: "ai", sort: "relevance" },
       dependencies({
         getUser: async () => ({ id: "user-1" }),
-        buildAiPlan: async () => null,
+        buildAiPlan: async () => ({ plan: null, error: "智能解析返回格式无效" }),
+        consumeAiQuota: async () => {
+          quotaConsumed = true;
+          return 1;
+        },
         searchWorks: async (request) => {
           searchedQuery = request.query;
           return result;
@@ -67,8 +73,10 @@ describe("executeSearch", () => {
     );
 
     expect(searchedQuery).toBe("信息行为");
+    expect(quotaConsumed).toBe(false);
     expect(response.aiFallback).toBe(true);
-    expect(response.remainingAiUses).toBe(1);
+    expect(response.aiError).toBe("智能解析返回格式无效");
+    expect(response.remainingAiUses).toBe(2);
   });
 
   it("applies validated AI filters while preserving explicit user filters", async () => {
@@ -78,11 +86,14 @@ describe("executeSearch", () => {
       dependencies({
         getUser: async () => ({ id: "user-1" }),
         buildAiPlan: async () => ({
-          topics: ["生成式人工智能"],
-          keywordsZh: ["生成式人工智能"],
-          keywordsEn: ["generative AI"],
-          filters: { fromYear: 2022, language: "zh", sort: "cited" },
-          explanation: "提取年份和语言条件",
+          plan: {
+            topics: ["生成式人工智能"],
+            keywordsZh: ["生成式人工智能"],
+            keywordsEn: ["generative AI"],
+            filters: { fromYear: 2022, language: "zh", sort: "cited" },
+            explanation: "提取年份和语言条件",
+          },
+          error: null,
         }),
         searchWorks: async (request) => {
           searchedRequest = request;

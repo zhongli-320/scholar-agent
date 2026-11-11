@@ -1,4 +1,4 @@
-import type { AiSearchPlan } from "./glm";
+import type { AiSearchPlan, AiSearchPlanResult } from "./glm";
 import type { SearchRequest, Work } from "./openalex";
 
 export type SearchHistoryInput = {
@@ -12,8 +12,9 @@ export type SearchHistoryInput = {
 
 export type SearchDependencies = {
   getUser: () => Promise<{ id: string } | null>;
+  getAiQuota: () => Promise<number>;
   consumeAiQuota: () => Promise<number>;
-  buildAiPlan: (query: string) => Promise<AiSearchPlan | null>;
+  buildAiPlan: (query: string) => Promise<AiSearchPlanResult>;
   searchWorks: (request: SearchRequest) => Promise<{
     works: Work[];
     total: number;
@@ -28,6 +29,7 @@ export type SearchServiceResponse = {
   nextCursor: string | null;
   aiPlan: AiSearchPlan | null;
   aiFallback: boolean;
+  aiError: string | null;
   remainingAiUses: number | null;
   historySaved: boolean;
 };
@@ -47,15 +49,24 @@ export async function executeSearch(
 ): Promise<SearchServiceResponse> {
   const user = await dependencies.getUser();
   let aiPlan: AiSearchPlan | null = null;
+  let aiError: string | null = null;
   let remainingAiUses: number | null = null;
 
   if (request.mode === "ai") {
     if (!user) throw new SearchServiceError("请登录后使用智能检索", 401);
-    remainingAiUses = await dependencies.consumeAiQuota();
-    if (remainingAiUses < 0) {
+    remainingAiUses = await dependencies.getAiQuota();
+    if (remainingAiUses <= 0) {
       throw new SearchServiceError("今日智能检索额度已用完，仍可使用普通检索", 429);
     }
-    aiPlan = await dependencies.buildAiPlan(request.query);
+    const attempt = await dependencies.buildAiPlan(request.query);
+    aiPlan = attempt.plan;
+    aiError = attempt.error;
+    if (aiPlan) {
+      remainingAiUses = await dependencies.consumeAiQuota();
+      if (remainingAiUses < 0) {
+        throw new SearchServiceError("今日智能检索额度已用完，仍可使用普通检索", 429);
+      }
+    }
   }
 
   const expandedQuery = aiPlan
@@ -88,6 +99,7 @@ export async function executeSearch(
     ...result,
     aiPlan,
     aiFallback: request.mode === "ai" && !aiPlan,
+    aiError,
     remainingAiUses,
     historySaved,
   };

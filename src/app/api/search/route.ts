@@ -23,6 +23,8 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
+  const configuredLimit = Number(process.env.AI_DAILY_LIMIT ?? "2");
+  const dailyLimit = Number.isInteger(configuredLimit) ? configuredLimit : 2;
   try {
     const result = await executeSearch(parsed.data, {
       async getUser() {
@@ -30,11 +32,21 @@ export async function POST(request: Request) {
         const { data } = await supabase.auth.getUser();
         return data.user ? { id: data.user.id } : null;
       },
+      async getAiQuota() {
+        if (!supabase) return 0;
+        const today = new Date().toISOString().slice(0, 10);
+        const { data, error } = await supabase
+          .from("ai_daily_usage")
+          .select("used_count")
+          .eq("usage_date", today)
+          .maybeSingle();
+        if (error) throw new SearchServiceError("无法验证智能检索额度", 503);
+        return Math.max(0, dailyLimit - (data?.used_count ?? 0));
+      },
       async consumeAiQuota() {
         if (!supabase) return -1;
-        const limit = Number(process.env.AI_DAILY_LIMIT ?? "2");
         const { data, error } = await supabase.rpc("consume_ai_quota", {
-          daily_limit: Number.isInteger(limit) ? limit : 2,
+          daily_limit: dailyLimit,
         });
         if (error) throw new SearchServiceError("无法验证智能检索额度", 503);
         return data;

@@ -73,3 +73,27 @@ test("mobile homepage does not overflow horizontally", async ({ page }) => {
   );
   expect(overflows).toBe(false);
 });
+
+test("AI fallback reports the reason in a delayed toast", async ({ page }) => {
+  await page.route("**/api/search", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        works: [],
+        total: 0,
+        nextCursor: null,
+        aiPlan: null,
+        aiFallback: true,
+        aiError: "智能解析鉴权失败，请联系管理员检查 GLM API 密钥",
+        remainingAiUses: 2,
+        historySaved: true,
+      }),
+    });
+  });
+
+  await page.goto("/search?q=生成式人工智能&mode=ai");
+
+  const toast = page.getByRole("alert").filter({ hasText: "本次未计入今日额度" });
+  await expect(toast).toContainText("本次未计入今日额度");
+  await expect(toast).toContainText("GLM API 密钥");
+});

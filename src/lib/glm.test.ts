@@ -55,9 +55,25 @@ describe("buildAiSearchPlan", () => {
       return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify(plan) }] }));
     });
 
-    expect(result).toEqual(plan);
+    expect(result).toEqual({ plan, error: null });
     expect(requests[0].url).toBe("https://open.bigmodel.cn/api/anthropic/v1/messages");
     expect(new Headers(requests[0].init?.headers).get("x-api-key")).toBe("test-key");
     expect(JSON.parse(String(requests[0].init?.body))).toMatchObject({ model: "GLM-4.7-Flash", max_tokens: 800 });
+  });
+
+  it("returns an actionable error when GLM rejects the credentials", async () => {
+    vi.stubEnv("GLM_API_KEY", "test-key");
+    vi.stubEnv("GLM_BASE_URL", "https://open.bigmodel.cn/api/anthropic");
+    vi.stubEnv("GLM_MODEL", "GLM-4.7-Flash");
+
+    const result = await buildAiSearchPlan(
+      "中文生成式人工智能研究",
+      async () => new Response('{"error":{"message":"invalid api key"}}', { status: 401 }),
+    );
+
+    expect(result).toEqual({
+      plan: null,
+      error: "智能解析鉴权失败，请联系管理员检查 GLM API 密钥",
+    });
   });
 });
