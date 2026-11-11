@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { getOpenAlexSuggestions, isSuggestionQueryReady } from "@/lib/suggestions";
+import { getSearchSuggestions } from "@/lib/search-suggestions";
+import { isSuggestionQueryReady } from "@/lib/suggestions";
 
 export async function GET(request: Request) {
   const query = new URL(request.url).searchParams.get("q")?.trim() ?? "";
@@ -9,9 +10,9 @@ export async function GET(request: Request) {
   }
 
   try {
-    return NextResponse.json(await getOpenAlexSuggestions(query));
+    return NextResponse.json(await getSearchSuggestions(query));
   } catch (error) {
-    console.error("OpenAlex suggestions failed", error);
+    console.error("Search suggestions failed", error);
     return NextResponse.json({ error: "联想服务暂时不可用" }, { status: 502 });
   }
 }

@@ -19,6 +19,7 @@ export type SearchDependencies = {
     works: Work[];
     total: number;
     nextCursor: string | null;
+    searchExpression: string;
   }>;
   saveHistory: (input: SearchHistoryInput) => Promise<void>;
 };
@@ -27,6 +28,7 @@ export type SearchServiceResponse = {
   works: Work[];
   total: number;
   nextCursor: string | null;
+  searchExpression: string;
   aiPlan: AiSearchPlan | null;
   aiFallback: boolean;
   aiError: string | null;

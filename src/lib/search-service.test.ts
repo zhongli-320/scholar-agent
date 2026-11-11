@@ -7,6 +7,7 @@ const result = {
   works: [{ id: "W1", title: "Paper" } as Work],
   total: 1,
   nextCursor: null,
+  searchExpression: 'search="信息行为" SORT relevance_score:desc',
 };
 
 function dependencies(overrides: Partial<SearchDependencies> = {}): SearchDependencies {

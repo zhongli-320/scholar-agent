@@ -34,7 +34,8 @@ export async function getOpenAlexSuggestions(
   if (!response.ok) throw new Error(`OpenAlex suggestions failed (${response.status})`);
 
   let data = (await response.json()) as OpenAlexAutocompleteResponse;
-  let terms = uniqueTerms(data.results, normalized);
+  const terms = uniqueTerms(data.results, normalized);
+  let queries: string[] = [];
 
   if (!terms.length && /[\u3400-\u9fff]/u.test(normalized)) {
     url.pathname = "/autocomplete/works";
@@ -44,10 +45,10 @@ export async function getOpenAlexSuggestions(
     });
     if (!worksResponse.ok) throw new Error(`OpenAlex suggestions failed (${worksResponse.status})`);
     data = (await worksResponse.json()) as OpenAlexAutocompleteResponse;
-    terms = uniqueTerms(data.results, normalized);
+    queries = uniqueTerms(data.results, normalized).slice(0, 3);
   }
 
-  return { terms, queries: buildRelatedQueries(normalized, terms) };
+  return { terms, queries: queries.length ? queries : buildRelatedQueries(normalized, terms) };
 }
 
 function uniqueTerms(results: OpenAlexAutocompleteResponse["results"], query: string) {

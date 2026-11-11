@@ -157,6 +157,7 @@ export function SearchResults() {
           <h2 className="text-lg font-bold text-slate-950">本次检索</h2>
           <dl className="mt-4 space-y-3">
             <Info label="查询词" value={query} />
+            {data?.searchExpression && <Info label="实际检索表达式" value={data.searchExpression} />}
             <Info label="结果" value={data ? `找到 ${data.total.toLocaleString("zh-CN")} 条结果` : "正在统计"} />
             {mode === "ai" && <AiInfo plan={data?.aiPlan ?? null} fallback={data?.aiFallback ?? false} provider={data?.aiProvider ?? null} model={data?.aiModel ?? null} />}
             {relatedTerms.length > 0 && <Info label="扩展词" value={relatedTerms.join("、")} />}

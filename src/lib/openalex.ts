@@ -170,18 +170,26 @@ export function normalizeOpenAlexWork(raw: OpenAlexWork): Work {
 export async function searchOpenAlex(
   request: SearchRequest,
   fetcher: typeof fetch = fetch,
-): Promise<{ works: Work[]; total: number; nextCursor: string | null }> {
+): Promise<{ works: Work[]; total: number; nextCursor: string | null; searchExpression: string }> {
+  const requestUrl = buildOpenAlexWorksUrl(request, process.env.OPENALEX_MAILTO);
   const response = await fetcher(
-    buildOpenAlexWorksUrl(request, process.env.OPENALEX_MAILTO),
+    requestUrl,
     { headers: buildOpenAlexHeaders(), cache: "no-store" },
   );
   if (!response.ok) throw new Error(`OpenAlex request failed (${response.status})`);
 
   const data = (await response.json()) as OpenAlexListResponse;
+  const params = new URL(requestUrl).searchParams;
+  const filter = params.get("filter");
   return {
     works: data.results.map(normalizeOpenAlexWork),
     total: data.meta.count,
     nextCursor: data.meta.next_cursor,
+    searchExpression: [
+      `search=${JSON.stringify(params.get("search") ?? "")}`,
+      filter ? `AND filter=(${filter})` : null,
+      `SORT ${params.get("sort")}`,
+    ].filter(Boolean).join(" "),
   };
 }
 

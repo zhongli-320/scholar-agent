@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { buildAiSearchPlan, parseAiSearchPlan } from "./glm";
+import { buildAiSearchPlan, buildAiSuggestions, parseAiSearchPlan } from "./glm";
+
+const generatedSuggestions = {
+  terms: ["知识组织", "元数据", "主题标引", "分类体系"],
+  queries: [
+    "信息组织研究进展",
+    "数智化时代的信息组织",
+    "信息组织的应用与挑战",
+  ],
+};
 
 const plan = {
   topics: ["生成式人工智能"],
@@ -141,5 +150,39 @@ describe("buildAiSearchPlan", () => {
     );
 
     expect(result.error).toBe("全部智能解析模型当前均不可用，请稍后重试");
+  });
+});
+
+describe("buildAiSuggestions", () => {
+  it("generates short terms and natural academic query suggestions", async () => {
+    configureProviders();
+    const result = await buildAiSuggestions(
+      "信息组织",
+      async () => new Response(JSON.stringify({
+        content: [{ type: "text", text: JSON.stringify(generatedSuggestions) }],
+      })),
+    );
+
+    expect(result).toEqual(generatedSuggestions);
+  });
+
+  it("uses the separate fallback GLM key after a temporary primary failure", async () => {
+    configureProviders();
+    const requests: Array<[string, string | null]> = [];
+
+    const result = await buildAiSuggestions("信息组织", async (_url, init) => {
+      const model = JSON.parse(String(init?.body)).model as string;
+      requests.push([model, new Headers(init?.headers).get("x-api-key")]);
+      if (model === "glm-5.3-flash") return new Response("overloaded", { status: 529 });
+      return new Response(JSON.stringify({
+        content: [{ type: "text", text: JSON.stringify(generatedSuggestions) }],
+      }));
+    });
+
+    expect(result).toEqual(generatedSuggestions);
+    expect(requests).toEqual([
+      ["glm-5.3-flash", "glm-key"],
+      ["GLM-4.7-Flash", "glm-fallback-key"],
+    ]);
   });
 });
