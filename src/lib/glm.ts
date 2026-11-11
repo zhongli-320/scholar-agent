@@ -100,6 +100,7 @@ function glmHttpError(status: number) {
   if (status === 401 || status === 403) return "智能解析鉴权失败，请联系管理员检查 GLM API 密钥";
   if (status === 404) return "智能解析接口或模型不可用，请联系管理员检查 GLM 地址与模型名";
   if (status === 429) return "智能解析服务请求过多，请稍后重试";
+  if (status === 529) return "GLM 模型当前访问量过大，请稍后重试";
   if (status >= 500) return "智能解析服务暂时不可用，请稍后重试";
   return `智能解析请求失败（GLM ${status}）`;
 }

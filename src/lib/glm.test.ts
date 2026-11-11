@@ -76,4 +76,17 @@ describe("buildAiSearchPlan", () => {
       error: "智能解析鉴权失败，请联系管理员检查 GLM API 密钥",
     });
   });
+
+  it("reports GLM overloads without hiding the reason", async () => {
+    vi.stubEnv("GLM_API_KEY", "test-key");
+    vi.stubEnv("GLM_BASE_URL", "https://open.bigmodel.cn/api/anthropic");
+    vi.stubEnv("GLM_MODEL", "GLM-4.7-Flash");
+
+    const result = await buildAiSearchPlan(
+      "中文生成式人工智能研究",
+      async () => new Response('{"error":{"code":"1305"}}', { status: 529 }),
+    );
+
+    expect(result.error).toBe("GLM 模型当前访问量过大，请稍后重试");
+  });
 });
