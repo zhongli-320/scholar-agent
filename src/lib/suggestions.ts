@@ -33,9 +33,26 @@ export async function getOpenAlexSuggestions(
   });
   if (!response.ok) throw new Error(`OpenAlex suggestions failed (${response.status})`);
 
-  const data = (await response.json()) as OpenAlexAutocompleteResponse;
-  const seen = new Set([normalized.toLocaleLowerCase()]);
-  const terms = data.results
+  let data = (await response.json()) as OpenAlexAutocompleteResponse;
+  let terms = uniqueTerms(data.results, normalized);
+
+  if (!terms.length && /[\u3400-\u9fff]/u.test(normalized)) {
+    url.pathname = "/autocomplete/works";
+    const worksResponse = await fetcher(url, {
+      headers: buildOpenAlexHeaders(),
+      cache: "no-store",
+    });
+    if (!worksResponse.ok) throw new Error(`OpenAlex suggestions failed (${worksResponse.status})`);
+    data = (await worksResponse.json()) as OpenAlexAutocompleteResponse;
+    terms = uniqueTerms(data.results, normalized);
+  }
+
+  return { terms, queries: buildRelatedQueries(normalized, terms) };
+}
+
+function uniqueTerms(results: OpenAlexAutocompleteResponse["results"], query: string) {
+  const seen = new Set([query.toLocaleLowerCase()]);
+  return results
     .map(({ display_name }) => display_name.trim())
     .filter((term) => {
       const key = term.toLocaleLowerCase();
@@ -44,8 +61,6 @@ export async function getOpenAlexSuggestions(
       return true;
     })
     .slice(0, 6);
-
-  return { terms, queries: buildRelatedQueries(normalized, terms) };
 }
 
 export function buildRelatedQueries(query: string, terms: string[]) {

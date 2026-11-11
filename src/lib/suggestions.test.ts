@@ -41,4 +41,30 @@ describe("getOpenAlexSuggestions", () => {
       ],
     });
   });
+
+  it("falls back to work titles when Chinese keyword autocomplete is empty", async () => {
+    const requestPaths: string[] = [];
+    const suggestions = await getOpenAlexSuggestions("人工智能", async (url) => {
+      requestPaths.push(new URL(String(url)).pathname);
+      const results = requestPaths.length === 1
+        ? []
+        : [
+            { display_name: "人工智能" },
+            { display_name: "人工智能时代的本科翻译教学" },
+            { display_name: "人工智能赋能高校学生思想政治教育研究" },
+          ];
+      return new Response(JSON.stringify({ results }));
+    });
+
+    expect(requestPaths).toEqual(["/autocomplete/keywords", "/autocomplete/works"]);
+    expect(suggestions.terms).toEqual([
+      "人工智能时代的本科翻译教学",
+      "人工智能赋能高校学生思想政治教育研究",
+    ]);
+    expect(suggestions.queries).toEqual([
+      "人工智能与人工智能时代的本科翻译教学的关系",
+      "人工智能对人工智能赋能高校学生思想政治教育研究的影响",
+      "人工智能领域的人工智能时代的本科翻译教学研究",
+    ]);
+  });
 });
