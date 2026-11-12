@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    return NextResponse.json(await getSearchSuggestions(query));
+    return NextResponse.json(await getSearchSuggestions(query, request.signal));
   } catch (error) {
     console.error("Search suggestions failed", error);
     return NextResponse.json({ error: "联想服务暂时不可用" }, { status: 502 });

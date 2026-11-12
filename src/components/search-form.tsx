@@ -41,7 +41,7 @@ export function SearchForm({ initialQuery = "" }: { initialQuery?: string }) {
           setSuggestions({ terms: [], queries: [] });
           setSuggestionError(error instanceof Error ? error.message : "联想服务暂时不可用");
         });
-    }, 350);
+    }, 800);
 
     return () => {
       window.clearTimeout(timer);

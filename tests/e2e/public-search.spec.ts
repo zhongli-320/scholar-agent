@@ -69,6 +69,23 @@ test("clicking outside closes the search suggestions", async ({ page }) => {
   await expect(page.getByRole("option", { name: "教育技术", exact: true })).toBeHidden();
 });
 
+test("typing a query sends only one settled suggestion request", async ({ page }) => {
+  let requests = 0;
+  await page.route("**/api/suggestions**", async (route) => {
+    requests += 1;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ terms: ["信息组织理论"], queries: ["信息组织研究前沿"] }),
+    });
+  });
+  await page.goto("/");
+
+  await page.getByLabel("研究问题或关键词").pressSequentially("信息组织", { delay: 500 });
+  await expect(page.getByRole("option", { name: "信息组织研究前沿" })).toBeVisible();
+
+  expect(requests).toBe(1);
+});
+
 test("results use the approved three-column content and automatic history message", async ({ page }) => {
   await page.route("**/api/suggestions**", async (route) => {
     await route.fulfill({
