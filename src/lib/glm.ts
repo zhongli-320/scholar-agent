@@ -28,7 +28,7 @@ const aiSuggestionsSchema = z.object({
       "联想词必须是短词组",
     ),
   ).min(4).max(6),
-  queries: z.array(z.string().trim().min(4).max(80)).length(3),
+  queries: z.array(z.string().trim().min(4).max(80)).min(4).max(8),
 });
 
 export type AiSearchPlan = z.infer<typeof aiSearchPlanSchema>;
@@ -52,7 +52,7 @@ type ModelAttempt<T> =
 const SYSTEM_PROMPT =
   "你是学术检索词规划器。只返回 JSON：topics、keywordsZh、keywordsEn、filters、explanation。filters 仅可含 fromYear、toYear、type、language、isOpenAccess、sort；关键词应适合 OpenAlex 题名与摘要检索，不得虚构论文。";
 const SUGGESTIONS_SYSTEM_PROMPT =
-  "你是学术检索联想生成器。只返回 JSON：terms、queries。terms 必须包含4至6个与输入直接相关的短学术词组，不得写完整句子、不得加序号、不得重复输入；queries 必须包含3个与输入同语种、可直接用于检索的自然学术表达，分别覆盖研究进展、时代或情境、应用或问题，不得照抄论文题名。例如输入‘信息组织’，queries 可包括‘信息组织研究进展’、‘数智化时代的信息组织’、‘信息组织的应用与挑战’。";
+  "你是学术检索联想生成器。只返回 JSON：terms、queries。terms 必须包含4至6个与输入直接相关的短学术词组，不得写完整句子、不得加序号、不得重复输入；queries 必须包含4至8个与输入同语种、可直接用于检索且彼此角度不同的自然学术表达，可涉及研究前沿、理论方法、技术情境、应用场景、比较关系或问题挑战，不得照抄论文题名。输入‘信息组织’时，‘信息组织研究进展’、‘数智化时代的信息组织’仅是表达风格示例，不得固定套用，须根据实际输入生成。";
 
 export function parseAiSearchPlan(content: string): AiSearchPlan | null {
   const cleaned = content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
@@ -125,6 +125,7 @@ export async function buildAiSearchPlan(
 export async function buildAiSuggestions(
   query: string,
   fetcher: typeof fetch = fetch,
+  signal?: AbortSignal,
 ): Promise<AiSuggestions | null> {
   for (const config of configuredModels()) {
     const attempt = await requestStructuredOutput(
@@ -135,8 +136,10 @@ export async function buildAiSuggestions(
       parseAiSuggestions,
       800,
       6_000,
+      signal,
     );
     if (attempt.value) return attempt.value;
+    if (signal?.aborted) return null;
     if (!attempt.retryable) return null;
   }
   return null;
@@ -180,6 +183,7 @@ async function requestStructuredOutput<T>(
   parse: (content: string) => T | null,
   maxTokens: number,
   timeout: number,
+  signal?: AbortSignal,
 ): Promise<ModelAttempt<T>> {
   try {
     const anthropicCompatible = config.baseUrl.includes("/api/anthropic");
@@ -191,7 +195,9 @@ async function requestStructuredOutput<T>(
       body: JSON.stringify(anthropicCompatible
         ? { model: config.model, max_tokens: maxTokens, temperature: 0.1, system: systemPrompt, messages: [{ role: "user", content: query }] }
         : { model: config.model, temperature: 0.1, enable_thinking: false, response_format: { type: "json_object" }, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: query }] }),
-      signal: AbortSignal.timeout(timeout),
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(timeout)])
+        : AbortSignal.timeout(timeout),
     });
     if (!response.ok) {
       const detail = (await response.text()).slice(0, 500);
@@ -226,6 +232,9 @@ async function requestStructuredOutput<T>(
     }
     return { value, error: null };
   } catch (error) {
+    if (signal?.aborted) {
+      return { value: null, error: "请求已取消", retryable: false };
+    }
     console.error("AI model request threw", {
       provider: config.provider,
       model: config.model,

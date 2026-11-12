@@ -44,12 +44,24 @@ function buildFallbackSuggestions(query: string): SearchSuggestions {
   if (/[\u3400-\u9fff]/u.test(query)) {
     return {
       terms: ["理论", "方法", "体系", "技术", "应用"].map((term) => `${query}${term}`),
-      queries: [`${query}研究进展`, `数智化时代的${query}`, `${query}的应用与挑战`],
+      queries: [
+        `${query}研究进展`,
+        `数智化时代的${query}`,
+        `${query}的理论与方法`,
+        `${query}技术的应用场景`,
+        `${query}的应用与挑战`,
+      ],
     };
   }
   return {
     terms: ["theory", "methods", "systems", "technology", "applications"].map((term) => `${query} ${term}`),
-    queries: [`${query} research progress`, `${query} in the digital intelligence era`, `${query} applications and challenges`],
+    queries: [
+      `${query} research progress`,
+      `${query} theories and methods`,
+      `${query} in the digital intelligence era`,
+      `${query} application scenarios`,
+      `${query} applications and challenges`,
+    ],
   };
 }
 
@@ -74,7 +86,9 @@ export function buildRelatedQueries(query: string, terms: string[]) {
       `${query}与${term(0)}的关系`,
       `${query}对${term(1)}的影响`,
       `${query}领域的${term(2)}研究`,
+      `${term(0)}视角下的${query}`,
+      `${query}在${term(1)}中的应用`,
     ];
   }
-  return [0, 1, 2].map((index) => `${query} AND "${term(index)}"`);
+  return [0, 1, 2, 3, 4].map((index) => `${query} AND "${term(index)}"`);
 }

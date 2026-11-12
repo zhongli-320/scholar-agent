@@ -5,9 +5,11 @@ import { buildAiSearchPlan, buildAiSuggestions, parseAiSearchPlan } from "./glm"
 const generatedSuggestions = {
   terms: ["知识组织", "元数据", "主题标引", "分类体系"],
   queries: [
-    "信息组织研究进展",
-    "数智化时代的信息组织",
-    "信息组织的应用与挑战",
+    "信息组织研究前沿",
+    "知识图谱环境下的信息组织",
+    "智能技术驱动的信息组织方法",
+    "信息组织在数字图书馆中的应用",
+    "信息组织的伦理与治理问题",
   ],
 };
 
@@ -154,6 +156,23 @@ describe("buildAiSearchPlan", () => {
 });
 
 describe("buildAiSuggestions", () => {
+  it("stops the model request when the suggestion request is abandoned", async () => {
+    configureProviders();
+    const controller = new AbortController();
+    const resultPromise = buildAiSuggestions("信息组织", async (_url, init) => {
+      return await new Promise<Response>((resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+        setTimeout(() => resolve(new Response(JSON.stringify({
+          content: [{ type: "text", text: JSON.stringify(generatedSuggestions) }],
+        }))), 50);
+      });
+    }, controller.signal);
+
+    controller.abort();
+
+    expect(await resultPromise).toBeNull();
+  });
+
   it("generates short terms and natural academic query suggestions", async () => {
     configureProviders();
     const result = await buildAiSuggestions(

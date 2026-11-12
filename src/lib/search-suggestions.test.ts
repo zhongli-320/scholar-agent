@@ -15,6 +15,7 @@ describe("getSearchSuggestions", () => {
 
     const result = await getSearchSuggestions(
       "信息组织",
+      undefined,
       async () => expected,
       async () => { throw new Error("OpenAlex must not be called"); },
     );
@@ -25,6 +26,7 @@ describe("getSearchSuggestions", () => {
   it("falls back to OpenAlex when LLM suggestions are unavailable", async () => {
     const result = await getSearchSuggestions(
       "信息组织",
+      undefined,
       async () => null,
       async () => new Response(JSON.stringify({
         results: [
@@ -40,6 +42,8 @@ describe("getSearchSuggestions", () => {
         "信息组织与知识组织的关系",
         "信息组织对元数据的影响",
         "信息组织领域的知识组织研究",
+        "知识组织视角下的信息组织",
+        "信息组织在元数据中的应用",
       ],
     });
   });
